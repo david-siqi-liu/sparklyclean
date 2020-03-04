@@ -1,2 +1,7 @@
 data/
 target/
+Output/
+run.txt
+.idea/
+*.DS_Store
+*.xlsm
