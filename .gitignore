@@ -6,4 +6,4 @@ run.txt
 *.DS_Store
 *.xlsm
 .gitattributes
-SparkyClean.iml
+*.iml
