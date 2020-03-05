@@ -6,21 +6,10 @@ package com.davidsiqiliu
 
 import org.apache.log4j._
 import org.apache.hadoop.fs._
-import org.apache.spark.{Partitioner, SparkConf, SparkContext}
-import org.rogach.scallop._
+import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.util.Random
 import scala.collection.mutable.ArrayBuffer
-
-
-class DisDedupConf(args: Seq[String]) extends ScallopConf(args) {
-  mainOptions = Seq(input, output, reducers)
-  val input: ScallopOption[String] = opt[String](descr = "input path", required = true)
-  val output: ScallopOption[String] = opt[String](descr = "output path", required = false, default = Some(""))
-  val reducers: ScallopOption[Int] = opt[Int](descr = "number of reducers", required = false, default = Some(1))
-  verify()
-}
-
 
 object DisDedup {
   val log: Logger = Logger.getLogger(getClass.getName)
@@ -43,14 +32,7 @@ object DisDedup {
       l = l - 1
       k = l * (l + 1) / 2
     }
-    log.info("Number of reducers: " + k)
-
-    // Partitioner
-    class DisDedupPartitioner(numReducers: Int) extends Partitioner {
-      def numPartitions: Int = numReducers
-
-      def getPartition(rid: Any): Int = rid.hashCode % numPartitions
-    }
+    log.info("Number of reducers used: " + k)
 
     // Random integer generator
     val rand = new Random(seed = 1)
@@ -105,6 +87,7 @@ object DisDedup {
     if (args.output() != "") {
       FileSystem.get(sparkContext.hadoopConfiguration).delete(new Path(args.output()), true)
       reducer.saveAsTextFile(args.output())
+      log.info("Output: " + args.output())
     }
 
     sparkContext.stop()
