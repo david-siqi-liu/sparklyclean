@@ -6,13 +6,86 @@ package com.davidsiqiliu
 
 import org.apache.log4j._
 import org.apache.hadoop.fs._
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext, Partitioner}
 
 import scala.util.Random
 import scala.collection.mutable.ArrayBuffer
 
 object DisDedup {
   val log: Logger = Logger.getLogger(getClass.getName)
+
+  def DisDedupMapper(tuple: String, l: Int, rand: Random): List[(Int, (String, String))] = {
+    // Generate anchor from [1, l]
+    val a = rand.nextInt(l) + 1
+    // Output
+    val pairs: ArrayBuffer[(Int, (String, String))] = ArrayBuffer()
+    // LEFT
+    for (p <- 1 until a) {
+      val rid = (2 * l - p + 2) * (p - 1) / 2 + (a - p)
+      pairs += ((rid, ("L", tuple)))
+    }
+    // SELF
+    val rid = (2 * l - a + 2) * (a - 1) / 2
+    pairs += ((rid, ("S", tuple)))
+    // RIGHT
+    for (q <- a + 1 to l) {
+      val rid = (2 * l - a + 2) * (a - 1) / 2 + (q - a)
+      pairs += ((rid, ("R", tuple)))
+    }
+    pairs.toList
+  }
+
+  class DisDedupPartitioner(numReducers: Int) extends Partitioner {
+    def numPartitions: Int = numReducers
+
+    def getPartition(rid: Any): Int = rid.hashCode % numPartitions
+  }
+
+  def DisDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(String, String)] = {
+    println("Partition: " + idx)
+
+    val leftTuples: ArrayBuffer[String] = ArrayBuffer()
+    val selfTuples: ArrayBuffer[String] = ArrayBuffer()
+    val rightTuples: ArrayBuffer[String] = ArrayBuffer()
+
+    while (iter.hasNext) {
+      val pair = iter.next
+      // Parse
+      val side = pair._2._1
+      val tuple = pair._2._2
+      // Partition into lists
+      if (side == "L") {
+        leftTuples += tuple
+      } else if (side == "R") {
+        rightTuples += tuple
+      } else {
+        selfTuples += tuple
+      }
+    }
+
+    println("\nLeftPairs:\n" + leftTuples.mkString("\n"))
+    println("\nSelfPairs:\n" + selfTuples.mkString("\n"))
+    println("\nRightPairs:\n" + rightTuples.mkString("\n"))
+
+    val duplicates: ArrayBuffer[(String, String)] = ArrayBuffer()
+    if (leftTuples.nonEmpty && rightTuples.nonEmpty) {
+      for (i <- leftTuples.indices; j <- rightTuples.indices) {
+        val t1ID = leftTuples(i).split(",")(0)
+        val t2ID = rightTuples(j).split(",")(0)
+        duplicates += ((t1ID, t2ID))
+      }
+    } else {
+      for (i <- selfTuples.indices; j <- selfTuples.indices) {
+        if (i != j) {
+          val t1ID = selfTuples(i).split(",")(0)
+          val t2ID = selfTuples(j).split(",")(0)
+          duplicates += ((t1ID, t2ID))
+        }
+      }
+    }
+
+    duplicates.iterator
+  }
 
   def main(argv: Array[String]): Unit = {
 
@@ -22,71 +95,45 @@ object DisDedup {
     val sparkContext = new SparkContext(sparkConf)
 
     // Read in input file
-    val inputFile = sparkContext.textFile(args.input())
+    var inputFile = sparkContext.emptyRDD[String]
+    if (args.header()) {
+      inputFile = sparkContext
+        .textFile(args.input())
+        .mapPartitionsWithIndex {
+          (idx, iter) => if (idx == 0) iter.drop(1) else iter
+        }
+    } else {
+      inputFile = sparkContext.textFile(args.input())
+    }
     log.info("Input: " + args.input())
 
-    // Size of triangle
+    // Triangle distribution
     var l = math.floor(math.sqrt(2 * args.reducers())).toInt
-    var k = l * (l + 1) / 2
-    if (k > args.reducers()) {
+    var numReducer = l * (l + 1) / 2
+    if (numReducer > args.reducers()) {
       l = l - 1
-      k = l * (l + 1) / 2
+      numReducer = l * (l + 1) / 2
     }
-    log.info("Number of reducers used: " + k)
+    log.info("Number of reducers used: " + numReducer)
 
-    // Random integer generator
-    val rand = new Random(seed = 1)
+    // Initialize random number generator
+    val rand = new Random(seed = 647)
 
-    // Anchor
-    var a : Int = 0
+    // Map
+    val inputRDD = inputFile
+      .flatMap(tuple => DisDedupMapper(tuple, l, rand))
 
-    // Reducer ID
-    var rid : Int = 0
+    // Partition
+    val partitionedRDD = inputRDD
+      .partitionBy(new DisDedupPartitioner(numReducer))
 
-    // Mapper
-    val mapper = inputFile
-      .flatMap(line => {
-        // Tokenize
-        val tokens = line.split(",")
-        val blockNum = tokens(0).toInt
-        val tuple = tokens(1)
-
-        // Generate anchor
-        a = rand.nextInt(l) + 1
-        print("Anchor for " + tuple + " : " + a + "\n")
-
-        // Output
-        val pairs: ArrayBuffer[(Integer, String)] = ArrayBuffer()
-
-        // LEFT
-        for (p <- 1 until a) {
-          rid = (2 * l - p + 2) * (p - 1) / 2 + (a - p)
-          pairs += (rid, "L#" + tuple).asInstanceOf[(Integer, String)]
-        }
-
-        // SELF
-        rid = (2 * l - a + 2) * (a - 1) / 2
-        pairs += (rid, "S#" + tuple).asInstanceOf[(Integer, String)]
-
-        // RIGHT
-        for (q <- a + 1 to l) {
-          rid = (2 * l - a + 2) * (a - 1) / 2 + (q - a)
-          pairs += (rid, "R#" + tuple).asInstanceOf[(Integer, String)]
-        }
-
-        // Emit
-        pairs.toList
-      })
-
-    // Reducer
-    val reducer = mapper
-      .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
-
-    reducer.foreach(println(_))
+    // Reduce
+    val outputRDD = partitionedRDD
+      .mapPartitionsWithIndex((idx, iter) => DisDedupReducer(idx, iter))
 
     if (args.output() != "") {
       FileSystem.get(sparkContext.hadoopConfiguration).delete(new Path(args.output()), true)
-      reducer.saveAsTextFile(args.output())
+      outputRDD.saveAsTextFile(args.output())
       log.info("Output: " + args.output())
     }
 
