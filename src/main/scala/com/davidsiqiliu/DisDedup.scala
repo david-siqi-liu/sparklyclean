@@ -14,6 +14,14 @@ import scala.collection.mutable.ArrayBuffer
 object DisDedup {
   val log: Logger = Logger.getLogger(getClass.getName)
 
+  def computeSimilarity(t1: Array[String], t2: Array[String]): Double = {
+    if (t1(0).split("-")(1) == t2(0).split("-")(1)){
+      1.0
+    } else {
+      0.001
+    }
+  }
+
   def DisDedupMapper(tuple: String, l: Int, rand: Random): List[(Int, (String, String))] = {
     // Generate anchor from [1, l]
     val a = rand.nextInt(l) + 1
@@ -37,13 +45,10 @@ object DisDedup {
 
   class DisDedupPartitioner(numReducers: Int) extends Partitioner {
     def numPartitions: Int = numReducers
-
     def getPartition(rid: Any): Int = rid.hashCode % numPartitions
   }
 
-  def DisDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(String, String)] = {
-    println("Partition: " + idx)
-
+  def DisDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(Double, (String, String))] = {
     val leftTuples: ArrayBuffer[String] = ArrayBuffer()
     val selfTuples: ArrayBuffer[String] = ArrayBuffer()
     val rightTuples: ArrayBuffer[String] = ArrayBuffer()
@@ -63,23 +68,19 @@ object DisDedup {
       }
     }
 
-    println("\nLeftPairs:\n" + leftTuples.mkString("\n"))
-    println("\nSelfPairs:\n" + selfTuples.mkString("\n"))
-    println("\nRightPairs:\n" + rightTuples.mkString("\n"))
-
-    val duplicates: ArrayBuffer[(String, String)] = ArrayBuffer()
+    val duplicates: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
     if (leftTuples.nonEmpty && rightTuples.nonEmpty) {
       for (i <- leftTuples.indices; j <- rightTuples.indices) {
-        val t1ID = leftTuples(i).split(",")(0)
-        val t2ID = rightTuples(j).split(",")(0)
-        duplicates += ((t1ID, t2ID))
+        val t1 = leftTuples(i).split(",")
+        val t2 = rightTuples(j).split(",")
+        duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
       }
     } else {
       for (i <- selfTuples.indices; j <- selfTuples.indices) {
         if (i != j) {
-          val t1ID = selfTuples(i).split(",")(0)
-          val t2ID = selfTuples(j).split(",")(0)
-          duplicates += ((t1ID, t2ID))
+          val t1 = selfTuples(i).split(",")
+          val t2 = selfTuples(j).split(",")
+            duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
         }
       }
     }
@@ -127,13 +128,23 @@ object DisDedup {
     val partitionedRDD = inputRDD
       .partitionBy(new DisDedupPartitioner(numReducer))
 
+    // Similarity score threshold
+    val threshold = args.threshold()
+
     // Reduce
     val outputRDD = partitionedRDD
       .mapPartitionsWithIndex((idx, iter) => DisDedupReducer(idx, iter))
+      .filter{
+        case (score, (t1, t2)) => score >= threshold
+      }
 
     if (args.output() != "") {
       FileSystem.get(sparkContext.hadoopConfiguration).delete(new Path(args.output()), true)
-      outputRDD.saveAsTextFile(args.output())
+      if (args.coalesce()){
+        outputRDD.coalesce(1, shuffle = true).saveAsTextFile(args.output())
+      } else {
+        outputRDD.saveAsTextFile(args.output())
+      }
       log.info("Output: " + args.output())
     }
 
