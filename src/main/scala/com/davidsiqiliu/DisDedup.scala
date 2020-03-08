@@ -22,7 +22,7 @@ object DisDedup {
     }
   }
 
-  def DisDedupMapper(tuple: String, l: Int, rand: Random): List[(Int, (String, String))] = {
+  def disDedupMapper(tuple: String, l: Int, rand: Random): List[(Int, (String, String))] = {
     // Generate anchor from [1, l]
     val a = rand.nextInt(l) + 1
     // Output
@@ -48,7 +48,7 @@ object DisDedup {
     def getPartition(rid: Any): Int = rid.hashCode % numPartitions
   }
 
-  def DisDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(Double, (String, String))] = {
+  def disDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(Double, (String, String))] = {
     val leftTuples: ArrayBuffer[String] = ArrayBuffer()
     val selfTuples: ArrayBuffer[String] = ArrayBuffer()
     val rightTuples: ArrayBuffer[String] = ArrayBuffer()
@@ -122,7 +122,7 @@ object DisDedup {
 
     // Map
     val inputRDD = inputFile
-      .flatMap(tuple => DisDedupMapper(tuple, l, rand))
+      .flatMap(tuple => disDedupMapper(tuple, l, rand))
 
     // Partition
     val partitionedRDD = inputRDD
@@ -133,7 +133,7 @@ object DisDedup {
 
     // Reduce
     val outputRDD = partitionedRDD
-      .mapPartitionsWithIndex((idx, iter) => DisDedupReducer(idx, iter))
+      .mapPartitionsWithIndex((idx, iter) => disDedupReducer(idx, iter))
       .filter{
         case (score, (t1, t2)) => score >= threshold
       }
