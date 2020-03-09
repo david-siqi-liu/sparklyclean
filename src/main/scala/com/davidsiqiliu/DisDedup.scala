@@ -6,49 +6,161 @@ package com.davidsiqiliu
 
 import org.apache.log4j._
 import org.apache.hadoop.fs._
-import org.apache.spark.{SparkConf, SparkContext, Partitioner}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.{Partitioner, SparkConf, SparkContext}
 
 import scala.util.Random
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.Map
 
 object DisDedup {
   val log: Logger = Logger.getLogger(getClass.getName)
 
+  def getBKV(tuple: String): String = {
+    val BKV_POS = 13
+
+    tuple.split(",")(BKV_POS).trim()
+  }
+
   def computeSimilarity(t1: Array[String], t2: Array[String]): Double = {
-    if (t1(0).split("-")(1) == t2(0).split("-")(1)){
+    if (t1(0).split("-")(1) == t2(0).split("-")(1)) {
       1.0
     } else {
       0.001
     }
   }
 
-  def disDedupMapper(tuple: String, l: Int, rand: Random): List[(Int, (String, String))] = {
-    // Generate anchor from [1, l]
-    val a = rand.nextInt(l) + 1
-    // Output
-    val pairs: ArrayBuffer[(Int, (String, String))] = ArrayBuffer()
-    // LEFT
-    for (p <- 1 until a) {
-      val rid = (2 * l - p + 2) * (p - 1) / 2 + (a - p)
-      pairs += ((rid, ("L", tuple)))
+  def setup(inputFile: RDD[String], k: Int, rand: Random): Map[String, List[Int]] = {
+    // Count each block's size
+    val sizeByBlock = inputFile
+      .map {
+        tuple => (getBKV(tuple), 1)
+      }
+      .reduceByKey(_ + _)
+
+    sizeByBlock.take(10).foreach(println(_))
+
+    // Calculate the total workload
+    val numBlocks = sizeByBlock
+      .count()
+
+    val workByBlock = sizeByBlock
+      .mapValues {
+        n => n * (n - 1) / 2
+      }
+
+    val workTotal = workByBlock
+      .map(_._2)
+      .sum
+
+    // Partition workByBlock into the following HashMaps based on workload
+    //  1. Multi-reducer blocks
+    //  2. Single-reducer blocks, larger than tau (for deterministic distribution)
+    //  3. Single-reducer blocks, smaller than tau (for randomized distribution)
+    val thresholdMultiSingle = workTotal.toDouble / k.toDouble
+    val tau = workTotal.toDouble / (3 * k * math.log(k))
+    val hmMulti = workByBlock
+      .filter {
+        case (bkv, w) => w > thresholdMultiSingle
+      }
+      .collectAsMap()
+
+
+    val hmSingleD = workByBlock
+      .filter {
+        case (bkv, w) => w <= thresholdMultiSingle && w > tau
+      }
+      .sortBy(_._2)
+      .collectAsMap()
+
+    val hmSingleR = workByBlock
+      .filter {
+        case (bkv, w) => w <= tau
+      }
+      .collectAsMap()
+
+    assert(hmMulti.size + hmSingleD.size + hmSingleR.size == numBlocks)
+
+    // Initialize return HashMap
+    val hmBKV2RID = Map[String, List[Int]]()
+
+    // Distribute multi-reducer blocks
+    val workMulti = hmMulti.values.sum
+    val s = rand.shuffle((1 to k).toList)
+    var n = 0
+    for ((bkv, w) <- hmMulti) {
+      val k_i = math.min(w, math.floor(w.toDouble / workMulti.toDouble * k.toDouble).toInt)
+      hmBKV2RID(bkv) = s.slice(n, n + k_i)
+      n += k_i
     }
-    // SELF
-    val rid = (2 * l - a + 2) * (a - 1) / 2
-    pairs += ((rid, ("S", tuple)))
-    // RIGHT
-    for (q <- a + 1 to l) {
-      val rid = (2 * l - a + 2) * (a - 1) / 2 + (q - a)
-      pairs += ((rid, ("R", tuple)))
+
+    // Distribute single-reducer, deterministically in a round-robin fashion
+    n = 1
+    for ((bkv, w) <- hmSingleD) {
+      hmBKV2RID(bkv) = List(n % k)
+      n += 1
     }
-    pairs.toList
+
+    // Distribute single-reducer, randomly
+    for ((bkv, w) <- hmSingleR) {
+      hmBKV2RID(bkv) = List(rand.nextInt(k) + 1)
+    }
+
+    hmBKV2RID
+  }
+
+  def getL(k: Int): Int = {
+    val l = math.floor(math.sqrt(2 * k)).toInt
+    if (l * (l + 1) / 2 <= k) {
+      l
+    } else {
+      l - 1
+    }
+  }
+
+  def disDedupMapper(tuple: String, bkv: String, rids: List[Int], k: Int, rand: Random):
+  List[((Int, String), (String, String))] = {
+    val k_i = rids.size
+    // Single-reducer block
+    if (k_i == 1) {
+      List(((rids.head, bkv), ("S", tuple)))
+    } else {
+      // Largest integer s.t. l_i(l_i - 1) / 2 <= k_i
+      val l_i = getL(k_i)
+      // Generate anchor from [1, l_i]
+      val a = rand.nextInt(l_i) + 1
+      // Output
+      val pairs: ArrayBuffer[((Int, String), (String, String))] = ArrayBuffer()
+      var ridIndex = 0
+      var rid = 0
+      // LEFT
+      for (p <- 1 until a) {
+        ridIndex = (2 * l_i - p + 2) * (p - 1) / 2 + (a - p)
+        rid = rids(ridIndex)
+        pairs += (((rid, bkv), ("L", tuple)))
+      }
+      // SELF
+      ridIndex = (2 * l_i - a + 2) * (a - 1) / 2
+      rid = rids(ridIndex)
+      pairs += (((rid, bkv), ("S", tuple)))
+      // RIGHT
+      for (q <- a + 1 to l_i) {
+        ridIndex = (2 * l_i - a + 2) * (a - 1) / 2 + (q - a)
+        rid = rids(ridIndex)
+        pairs += (((rid, bkv), ("R", tuple)))
+      }
+      pairs.toList
+    }
   }
 
   class DisDedupPartitioner(numReducers: Int) extends Partitioner {
     def numPartitions: Int = numReducers
-    def getPartition(rid: Any): Int = rid.hashCode % numPartitions
+
+    def getPartition(ridbkv: Any): Int = ridbkv.asInstanceOf[(Int, String)]._1.hashCode % numPartitions
   }
 
-  def disDedupReducer(idx: Int, iter: Iterator[(Int, (String, String))]): Iterator[(Double, (String, String))] = {
+  def disDedupReducer(idx: Int, iter: Iterator[((Int, String), (String, String))]):
+  Iterator[(Double, (String, String))] = {
     val leftTuples: ArrayBuffer[String] = ArrayBuffer()
     val selfTuples: ArrayBuffer[String] = ArrayBuffer()
     val rightTuples: ArrayBuffer[String] = ArrayBuffer()
@@ -77,10 +189,10 @@ object DisDedup {
       }
     } else {
       for (i <- selfTuples.indices; j <- selfTuples.indices) {
-        if (i != j) {
+        if (i < j) {
           val t1 = selfTuples(i).split(",")
           val t2 = selfTuples(j).split(",")
-            duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
+          duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
         }
       }
     }
@@ -92,41 +204,41 @@ object DisDedup {
 
     val args = new DisDedupConf(argv)
 
-    val sparkConf = new SparkConf().setAppName("DisDedup")
-    val sparkContext = new SparkContext(sparkConf)
+    val conf = new SparkConf().setAppName("DisDedup")
+    val sc = new SparkContext(conf)
 
     // Read in input file
-    var inputFile = sparkContext.emptyRDD[String]
+    var inputFile = sc.emptyRDD[String]
     if (args.header()) {
-      inputFile = sparkContext
+      inputFile = sc
         .textFile(args.input())
         .mapPartitionsWithIndex {
           (idx, iter) => if (idx == 0) iter.drop(1) else iter
         }
     } else {
-      inputFile = sparkContext.textFile(args.input())
+      inputFile = sc.textFile(args.input())
     }
-    log.info("Input: " + args.input())
-
-    // Triangle distribution
-    var l = math.floor(math.sqrt(2 * args.reducers())).toInt
-    var numReducer = l * (l + 1) / 2
-    if (numReducer > args.reducers()) {
-      l = l - 1
-      numReducer = l * (l + 1) / 2
-    }
-    log.info("Number of reducers used: " + numReducer)
+    log.info("\nInput: " + args.input())
 
     // Initialize random number generator
     val rand = new Random(seed = 647)
 
+    // Get HashMap for bkv (block-key-value) to reducer ID
+    val k = args.reducers()
+    val hmBKV2RID = sc.broadcast(setup(inputFile, k, rand))
+    log.info("\nhmBKV2RID: " + hmBKV2RID.value.toString())
+
     // Map
     val inputRDD = inputFile
-      .flatMap(tuple => disDedupMapper(tuple, l, rand))
+      .flatMap(tuple => {
+        val bkv = getBKV(tuple)
+        val rids = hmBKV2RID.value(bkv)
+        disDedupMapper(tuple, bkv, rids, k, rand)
+      })
 
     // Partition
     val partitionedRDD = inputRDD
-      .partitionBy(new DisDedupPartitioner(numReducer))
+      .partitionBy(new DisDedupPartitioner(k))
 
     // Similarity score threshold
     val threshold = args.threshold()
@@ -134,20 +246,22 @@ object DisDedup {
     // Reduce
     val outputRDD = partitionedRDD
       .mapPartitionsWithIndex((idx, iter) => disDedupReducer(idx, iter))
-      .filter{
+      .filter {
         case (score, (t1, t2)) => score >= threshold
       }
 
     if (args.output() != "") {
-      FileSystem.get(sparkContext.hadoopConfiguration).delete(new Path(args.output()), true)
-      if (args.coalesce()){
+      FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.output()), true)
+      if (args.coalesce()) {
         outputRDD.coalesce(1, shuffle = true).saveAsTextFile(args.output())
       } else {
-        outputRDD.saveAsTextFile(args.output())
+        inputRDD.saveAsTextFile(args.output() + "/mapper")
+        partitionedRDD.saveAsTextFile(args.output() + "/partitioner")
+        outputRDD.saveAsTextFile(args.output() + "/reducer")
       }
-      log.info("Output: " + args.output())
+      log.info("\nOutput: " + args.output())
     }
 
-    sparkContext.stop()
+    sc.stop()
   }
 }
