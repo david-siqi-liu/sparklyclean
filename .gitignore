@@ -1,9 +1,0 @@
-.gitattributes
-/data/
-/target/
-/output/
-/.idea/
-run.txt
-*.DS_Store
-*.xlsm
-*.iml
