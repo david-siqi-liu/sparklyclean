@@ -1,0 +1,10 @@
+.gitattributes
+/data/
+/target/
+/output/
+/.idea/
+/febrl-0.4.2/
+run.txt
+*.DS_Store
+*.xlsm
+*.iml
