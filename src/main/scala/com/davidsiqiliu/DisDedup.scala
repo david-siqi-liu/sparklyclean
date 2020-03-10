@@ -292,7 +292,7 @@ object DisDedup {
         inputRDD.saveAsTextFile(args.output() + "/mapper")
         partitionedRDD.saveAsTextFile(args.output() + "/partitioner")
         outputRDD.saveAsTextFile(args.output() + "/reducer")
-//        outputRDD.saveAsTextFile(args.output())
+        //        outputRDD.saveAsTextFile(args.output())
       }
       log.info("\nOutput: " + args.output())
     }
