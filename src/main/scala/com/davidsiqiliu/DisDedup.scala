@@ -38,8 +38,6 @@ object DisDedup {
       }
       .reduceByKey(_ + _)
 
-    sizeByBlock.take(10).foreach(println(_))
-
     // Calculate the total workload
     val numBlocks = sizeByBlock
       .count()
@@ -88,8 +86,9 @@ object DisDedup {
     val workMulti = hmMulti.values.sum
     val s = rand.shuffle((1 to k).toList)
     var n = 0
+    var k_i = 0
     for ((bkv, w) <- hmMulti) {
-      val k_i = math.min(w, math.floor(w.toDouble / workMulti.toDouble * k.toDouble).toInt)
+      k_i = math.min(w, math.floor(w.toDouble / workMulti.toDouble * k.toDouble).toInt)
       hmBKV2RID(bkv) = s.slice(n, n + k_i)
       n += k_i
     }
@@ -109,12 +108,12 @@ object DisDedup {
     hmBKV2RID
   }
 
-  def getL(k: Int): Int = {
-    val l = math.floor(math.sqrt(2 * k)).toInt
-    if (l * (l + 1) / 2 <= k) {
-      l
+  def getL(k_i: Int): Int = {
+    val l_i = math.floor(math.sqrt(2 * k_i)).toInt
+    if (l_i * (l_i + 1) / 2 <= k_i) {
+      l_i
     } else {
-      l - 1
+      l_i - 1
     }
   }
 
@@ -125,7 +124,8 @@ object DisDedup {
     if (k_i == 1) {
       List(((rids.head, bkv), ("S", tuple)))
     } else {
-      // Largest integer s.t. l_i(l_i - 1) / 2 <= k_i
+      // Multi-reducer block, triangle distribution
+      // Largest integer s.t. l_i(l_i + 1) / 2 <= k_i (error in the paper)
       val l_i = getL(k_i)
       // Generate anchor from [1, l_i]
       val a = rand.nextInt(l_i) + 1
@@ -156,48 +156,82 @@ object DisDedup {
   class DisDedupPartitioner(numReducers: Int) extends Partitioner {
     def numPartitions: Int = numReducers
 
-    def getPartition(ridbkv: Any): Int = ridbkv.asInstanceOf[(Int, String)]._1.hashCode % numPartitions
+    def getPartition(ridbkv: Any): Int = (ridbkv.asInstanceOf[(Int, String)]._1 - 1).hashCode % numPartitions
   }
 
-  def disDedupReducer(idx: Int, iter: Iterator[((Int, String), (String, String))]):
-  Iterator[(Double, (String, String))] = {
-    val leftTuples: ArrayBuffer[String] = ArrayBuffer()
-    val selfTuples: ArrayBuffer[String] = ArrayBuffer()
-    val rightTuples: ArrayBuffer[String] = ArrayBuffer()
+  def compareWithinBlock(leftTuples: ArrayBuffer[String], selfTuples: ArrayBuffer[String], rightTuples: ArrayBuffer[String]):
+  ArrayBuffer[(Double, (String, String))] = {
+    val similarities: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
 
-    while (iter.hasNext) {
-      val pair = iter.next
-      // Parse
-      val side = pair._2._1
-      val tuple = pair._2._2
-      // Partition into lists
-      if (side == "L") {
-        leftTuples += tuple
-      } else if (side == "R") {
-        rightTuples += tuple
-      } else {
-        selfTuples += tuple
-      }
-    }
-
-    val duplicates: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
     if (leftTuples.nonEmpty && rightTuples.nonEmpty) {
       for (i <- leftTuples.indices; j <- rightTuples.indices) {
         val t1 = leftTuples(i).split(",")
         val t2 = rightTuples(j).split(",")
-        duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
+        similarities += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
       }
     } else {
       for (i <- selfTuples.indices; j <- selfTuples.indices) {
         if (i < j) {
           val t1 = selfTuples(i).split(",")
           val t2 = selfTuples(j).split(",")
-          duplicates += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
+          similarities += ((computeSimilarity(t1, t2), (t1(0), t2(0))))
         }
       }
     }
 
-    duplicates.iterator
+    similarities
+  }
+
+  def disDedupReducer(iter: Iterator[((Int, String), (String, String))]):
+  Iterator[(Double, (String, String))] = {
+    var leftTuples: ArrayBuffer[String] = ArrayBuffer()
+    var selfTuples: ArrayBuffer[String] = ArrayBuffer()
+    var rightTuples: ArrayBuffer[String] = ArrayBuffer()
+    val similarities: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
+
+    var pair = ((0, ""), ("", ""))
+    var prevbkv = ""
+    var bkv = ""
+    var side = ""
+    var tuple = ""
+    while (iter.hasNext) {
+      pair = iter.next
+      // Parse
+      bkv = pair._1._2
+      side = pair._2._1
+      tuple = pair._2._2
+      // Same block
+      if (bkv == prevbkv) {
+        // Add into tuple lists
+        if (side == "L") {
+          leftTuples += tuple
+        } else if (side == "R") {
+          rightTuples += tuple
+        } else {
+          selfTuples += tuple
+        }
+      }
+      // New block
+      else {
+        // Conduct comparison for the previous block
+        similarities ++= compareWithinBlock(leftTuples, selfTuples, rightTuples)
+        // Reset tuple lists
+        if (side == "L") {
+          leftTuples = ArrayBuffer[String](tuple)
+        } else if (side == "R") {
+          rightTuples = ArrayBuffer[String](tuple)
+        } else {
+          selfTuples = ArrayBuffer[String](tuple)
+        }
+        // Set prevbkv to bkv
+        prevbkv = bkv
+      }
+    }
+
+    // Conduct comparison for the last block
+    similarities ++= compareWithinBlock(leftTuples, selfTuples, rightTuples)
+
+    similarities.iterator
   }
 
   def main(argv: Array[String]): Unit = {
@@ -238,14 +272,14 @@ object DisDedup {
 
     // Partition
     val partitionedRDD = inputRDD
-      .partitionBy(new DisDedupPartitioner(k))
+      .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
 
     // Similarity score threshold
     val threshold = args.threshold()
 
     // Reduce
     val outputRDD = partitionedRDD
-      .mapPartitionsWithIndex((idx, iter) => disDedupReducer(idx, iter))
+      .mapPartitions(iter => disDedupReducer(iter))
       .filter {
         case (score, (t1, t2)) => score >= threshold
       }
@@ -258,6 +292,7 @@ object DisDedup {
         inputRDD.saveAsTextFile(args.output() + "/mapper")
         partitionedRDD.saveAsTextFile(args.output() + "/partitioner")
         outputRDD.saveAsTextFile(args.output() + "/reducer")
+//        outputRDD.saveAsTextFile(args.output())
       }
       log.info("\nOutput: " + args.output())
     }
