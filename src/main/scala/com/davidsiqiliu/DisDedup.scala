@@ -93,14 +93,15 @@ object DisDedup {
       n += k_i
     }
 
-    // Distribute single-reducer, deterministically in a round-robin fashion
-    n = 1
+    // Distribute large single-reducer blocks, deterministically in a round-robin fashion
+    // However, unlike in the paper, we will continue to use the leftover reducers from
+    // multi-reducer distribution to avoid un-used reducers
     for ((bkv, w) <- hmSingleD) {
-      hmBKV2RID(bkv) = List(n % k)
+      hmBKV2RID(bkv) = s.slice(n % k, n % k + 1)
       n += 1
     }
 
-    // Distribute single-reducer, randomly
+    // Distribute small single-reducer blocks, randomly
     for ((bkv, w) <- hmSingleR) {
       hmBKV2RID(bkv) = List(rand.nextInt(k) + 1)
     }
