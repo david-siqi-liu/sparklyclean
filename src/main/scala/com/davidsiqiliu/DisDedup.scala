@@ -87,8 +87,11 @@ object DisDedup {
     val s = rand.shuffle((1 to k).toList)
     var n = 0
     var k_i = 0
+    var l_i = 0
     for ((bkv, w) <- hmMulti) {
       k_i = math.min(w, math.floor(w.toDouble / workMulti.toDouble * k.toDouble).toInt)
+      l_i = getL(k_i) // Improvement
+      k_i = l_i * (l_i + 1) / 2
       hmBKV2RID(bkv) = s.slice(n, n + k_i)
       n += k_i
     }
