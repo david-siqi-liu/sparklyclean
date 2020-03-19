@@ -26,8 +26,8 @@ object DisDedup {
     //    for (j <- 1 to numBlocks){
     //        ...
     //    }
-    bkvs += "h1#" + t(STATE_POS)
-    bkvs += "h2#" + t(BKV_POS)
+    bkvs += "h1#" + t(STATE_POS).trim()
+//    bkvs += "h2#" + t(BKV_POS).trim()
 
     bkvs.toList
   }
