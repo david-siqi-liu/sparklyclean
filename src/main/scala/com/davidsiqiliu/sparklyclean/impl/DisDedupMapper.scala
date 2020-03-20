@@ -1,5 +1,7 @@
 package com.davidsiqiliu.sparklyclean.impl
 
+import com.davidsiqiliu.sparklyclean.impl.Util._
+
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
@@ -13,7 +15,7 @@ object DisDedupMapper {
     } else {
       // Multi-reducer block, triangle distribution
       // Largest integer s.t. l_i(l_i + 1) / 2 <= k_i (error in the paper)
-      val l_i = Util.getL(k_i)
+      val l_i = getL(k_i)
       // Generate anchor from [1, l_i]
       val a = rand.nextInt(l_i) + 1
       // Output

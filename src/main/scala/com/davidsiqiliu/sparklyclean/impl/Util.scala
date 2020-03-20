@@ -40,27 +40,13 @@ object Util {
     }
   }
 
-  def computeSimilarity(tuple1: String, tuple2: String): Double = {
-    /*
-     TO-DO
-     */
-    val t1ID = getId(tuple1)
-    val t2ID = getId(tuple2)
-
-    if (t1ID.split("-")(1) == t2ID.split("-")(1)) {
-      1.0
-    } else {
-      0.001
-    }
-  }
-
   def lowestCommonBlockNum(tuple1: String, tuple2: String): Int = {
     val t1BKVs: List[BKV] = getBKVs(tuple1)
     val t2BKVs: List[BKV] = getBKVs(tuple2)
 
     var lowest: Int = Int.MaxValue
 
-    for (t1bkv <- t1BKVs; t2bkv <- t2BKVs){
+    for (t1bkv <- t1BKVs; t2bkv <- t2BKVs) {
       if (t1bkv == t2bkv) {
         lowest = math.min(lowest, t1bkv.b)
       }
@@ -69,30 +55,4 @@ object Util {
     lowest
   }
 
-  def compareWithinBlock(bkv: BKV, leftTuples: ArrayBuffer[String], selfTuples: ArrayBuffer[String], rightTuples: ArrayBuffer[String]):
-  ArrayBuffer[(Double, (String, String))] = {
-    val similarities: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
-
-    if (leftTuples.nonEmpty && rightTuples.nonEmpty) {
-      for (i <- leftTuples.indices; j <- rightTuples.indices) {
-        val t1 = leftTuples(i)
-        val t2 = rightTuples(j)
-        if (bkv.b <= lowestCommonBlockNum(t1, t2)) {
-          similarities += ((computeSimilarity(t1, t2), (getId(t1), getId(t2))))
-        }
-      }
-    } else {
-      for (i <- selfTuples.indices; j <- selfTuples.indices) {
-        if (i < j) {
-          val t1 = selfTuples(i)
-          val t2 = selfTuples(j)
-          if (bkv.b <= lowestCommonBlockNum(t1, t2)) {
-            similarities += ((computeSimilarity(t1, t2), (getId(t1), getId(t2))))
-          }
-        }
-      }
-    }
-
-    similarities
-  }
 }

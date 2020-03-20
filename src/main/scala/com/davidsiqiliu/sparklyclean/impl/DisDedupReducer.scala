@@ -4,11 +4,11 @@ import scala.collection.mutable.ArrayBuffer
 
 object DisDedupReducer {
   def reduce(iter: Iterator[((Int, BKV), (String, String))]):
-  Iterator[(Double, (String, String))] = {
+  Iterator[((String, String), List[Double])] = {
     var leftTuples: ArrayBuffer[String] = ArrayBuffer()
     var selfTuples: ArrayBuffer[String] = ArrayBuffer()
     var rightTuples: ArrayBuffer[String] = ArrayBuffer()
-    val similarities: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
+    val comparisonVectors: ArrayBuffer[((String, String), List[Double])] = ArrayBuffer()
 
     var pair = ((0, BKV(0, "")), ("", "")) // ((rid, bkv), (L/S/R, tuple))
     var bkvPrev = BKV(0, "")
@@ -35,7 +35,7 @@ object DisDedupReducer {
       // New block
       else {
         // Conduct comparison for the previous block
-        similarities ++= Util.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
+        comparisonVectors ++= Compare.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
         // Reset tuple lists
         leftTuples.clear()
         rightTuples.clear()
@@ -54,8 +54,8 @@ object DisDedupReducer {
     }
 
     // Conduct comparison for the last block
-    similarities ++= Util.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
+    comparisonVectors ++= Compare.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
 
-    similarities.iterator
+    comparisonVectors.iterator
   }
 }

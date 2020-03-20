@@ -1,5 +1,6 @@
 package com.davidsiqiliu.sparklyclean.impl
 
+import com.davidsiqiliu.sparklyclean.impl.Util._
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
@@ -14,7 +15,7 @@ object Setup {
       .flatMap(
         tuple => {
           val bkvs: ArrayBuffer[(BKV, Int)] = ArrayBuffer()
-          for (b <- Util.getBKVs(tuple)) {
+          for (b <- getBKVs(tuple)) {
             bkvs += ((b, 1))
           }
           bkvs.toList
@@ -75,7 +76,7 @@ object Setup {
     var l_i = 0
     for ((bkv, w) <- hmMulti) {
       k_i = math.min(w, math.floor(w.toDouble / workMulti.toDouble * k.toDouble).toInt)
-      l_i = Util.getL(k_i) // Improvement
+      l_i = getL(k_i) // Improvement
       k_i = l_i * (l_i + 1) / 2
       hmBKV2RID(bkv) = s.slice(n, n + k_i)
       n += k_i

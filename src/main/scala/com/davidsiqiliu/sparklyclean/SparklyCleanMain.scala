@@ -55,15 +55,15 @@ object SparklyCleanMain {
     val partitionedRDD = inputRDD
       .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
 
-    // Similarity score threshold
-    val threshold = args.threshold()
+//    // Similarity score threshold
+//    val threshold = args.threshold()
 
     // Reduce
     val outputRDD = partitionedRDD
       .mapPartitions(iter => DisDedupReducer.reduce(iter))
-      .filter {
-        case (score, (_, _)) => score >= threshold
-      }
+//      .filter {
+//        case (score, (_, _)) => score >= threshold
+//      }
 
     if (args.output() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.output()), true)
