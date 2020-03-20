@@ -4,8 +4,8 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
 object DisDedupMapper {
-  def map(tuple: String, bkv: String, rids: List[Int], k: Int, rand: Random):
-  ArrayBuffer[((Int, String), (String, String))] = {
+  def map(tuple: String, bkv: BKV, rids: List[Int], k: Int, rand: Random):
+  ArrayBuffer[((Int, BKV), (String, String))] = {
     val k_i = rids.size
     // Single-reducer block
     if (k_i == 1) {
@@ -17,7 +17,7 @@ object DisDedupMapper {
       // Generate anchor from [1, l_i]
       val a = rand.nextInt(l_i) + 1
       // Output
-      val pairs: ArrayBuffer[((Int, String), (String, String))] = ArrayBuffer()
+      val pairs: ArrayBuffer[((Int, BKV), (String, String))] = ArrayBuffer()
       var ridIndex = 0
       var rid = 0
       // LEFT

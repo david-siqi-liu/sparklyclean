@@ -43,10 +43,10 @@ object SparklyCleanMain {
     val inputRDD = inputFile
       .flatMap(tuple => {
         val bkvs = Util.getBKVs(tuple)
-        val output: ArrayBuffer[((Int, String), (String, String))] = new ArrayBuffer()
-        for (b <- bkvs) {
-          val rids = hmBKV2RID.value(b)
-          output ++= DisDedupMapper.map(tuple, b, rids, k, rand)
+        val output: ArrayBuffer[((Int, BKV), (String, String))] = new ArrayBuffer()
+        for (bkv <- bkvs) {
+          val rids = hmBKV2RID.value(bkv)
+          output ++= DisDedupMapper.map(tuple, bkv, rids, k, rand)
         }
         output.toList
       })
