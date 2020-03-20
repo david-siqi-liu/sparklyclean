@@ -16,7 +16,6 @@ object Util {
   }
 
   def getBKVs(tuple: String): List[BKV] = {
-    val numBlocks = 2
     val STATE_POS = 8
     val BKV_POS = 13
 

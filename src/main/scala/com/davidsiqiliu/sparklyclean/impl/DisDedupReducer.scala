@@ -11,18 +11,18 @@ object DisDedupReducer {
     val similarities: ArrayBuffer[(Double, (String, String))] = ArrayBuffer()
 
     var pair = ((0, BKV(0, "")), ("", "")) // ((rid, bkv), (L/S/R, tuple))
-    var prevbkv = BKV(0, "")
-    var bkv = BKV(0, "")
+    var bkvPrev = BKV(0, "")
+    var bkvCurr = BKV(0, "")
     var side = ""
     var tuple = ""
     while (iter.hasNext) {
       pair = iter.next
       // Parse
-      bkv = pair._1._2
+      bkvCurr = pair._1._2
       side = pair._2._1
       tuple = pair._2._2
       // Same block
-      if (bkv == prevbkv) {
+      if (bkvCurr == bkvPrev) {
         // Add into tuple lists
         if (side == "L") {
           leftTuples += tuple
@@ -35,7 +35,7 @@ object DisDedupReducer {
       // New block
       else {
         // Conduct comparison for the previous block
-        similarities ++= Util.compareWithinBlock(prevbkv, leftTuples, selfTuples, rightTuples)
+        similarities ++= Util.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
         // Reset tuple lists
         leftTuples.clear()
         rightTuples.clear()
@@ -48,13 +48,13 @@ object DisDedupReducer {
         } else {
           selfTuples += tuple
         }
-        // Set prevbkv to bkv
-        prevbkv = bkv
+        // Set bkvPrev to bkvCurr
+        bkvPrev = bkvCurr
       }
     }
 
     // Conduct comparison for the last block
-    similarities ++= Util.compareWithinBlock(prevbkv, leftTuples, selfTuples, rightTuples)
+    similarities ++= Util.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
 
     similarities.iterator
   }

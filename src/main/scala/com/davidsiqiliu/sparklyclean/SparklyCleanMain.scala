@@ -62,7 +62,7 @@ object SparklyCleanMain {
     val outputRDD = partitionedRDD
       .mapPartitions(iter => DisDedupReducer.reduce(iter))
       .filter {
-        case (score, (t1, t2)) => score >= threshold
+        case (score, (_, _)) => score >= threshold
       }
 
     if (args.output() != "") {
