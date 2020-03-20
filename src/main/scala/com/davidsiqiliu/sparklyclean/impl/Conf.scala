@@ -1,8 +1,8 @@
-package com.davidsiqiliu
+package com.davidsiqiliu.sparklyclean.impl
 
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 
-class DisDedupConf(args: Seq[String]) extends ScallopConf(args) {
+class Conf(args: Seq[String]) extends ScallopConf(args) {
   mainOptions = Seq(input, output, reducers)
   val input: ScallopOption[String] = opt[String](descr = "input path", required = true)
   val output: ScallopOption[String] = opt[String](descr = "output path", required = false, default = Some(""))
