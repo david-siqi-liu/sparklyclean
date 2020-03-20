@@ -2,6 +2,7 @@
 /data/
 /target/
 /output/
+/dbfs_output/
 /.idea/
 /febrl-0.4.2/
 run.txt
