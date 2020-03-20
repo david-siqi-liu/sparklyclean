@@ -7,11 +7,11 @@ import scala.util.Random
 
 object DisDedupMapper {
   def map(tuple: String, bkv: BKV, rids: List[Int], k: Int, rand: Random):
-  ArrayBuffer[((Int, BKV), (String, String))] = {
+  List[((Int, BKV), (String, String))] = {
     val k_i = rids.size
     // Single-reducer block
     if (k_i == 1) {
-      ArrayBuffer(((rids.head, bkv), ("S", tuple)))
+      List[((Int, BKV), (String, String))](((rids.head, bkv), ("S", tuple)))
     } else {
       // Multi-reducer block, triangle distribution
       // Largest integer s.t. l_i(l_i + 1) / 2 <= k_i (error in the paper)
@@ -38,7 +38,7 @@ object DisDedupMapper {
         rid = rids(ridIndex)
         pairs += (((rid, bkv), ("R", tuple)))
       }
-      pairs
+      pairs.toList
     }
   }
 }

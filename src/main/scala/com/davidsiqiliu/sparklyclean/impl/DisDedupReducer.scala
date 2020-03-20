@@ -3,12 +3,12 @@ package com.davidsiqiliu.sparklyclean.impl
 import scala.collection.mutable.ArrayBuffer
 
 object DisDedupReducer {
-  def reduce(iter: Iterator[((Int, BKV), (String, String))]):
-  Iterator[((String, String), List[Double])] = {
+  def reduce(label: Boolean, iter: Iterator[((Int, BKV), (String, String))]):
+  Iterator[String] = {
     var leftTuples: ArrayBuffer[String] = ArrayBuffer()
     var selfTuples: ArrayBuffer[String] = ArrayBuffer()
     var rightTuples: ArrayBuffer[String] = ArrayBuffer()
-    val comparisonVectors: ArrayBuffer[((String, String), List[Double])] = ArrayBuffer()
+    val labeledPoints: ArrayBuffer[String] = ArrayBuffer()
 
     var pair = ((0, BKV(0, "")), ("", "")) // ((rid, bkv), (L/S/R, tuple))
     var bkvPrev = BKV(0, "")
@@ -35,7 +35,7 @@ object DisDedupReducer {
       // New block
       else {
         // Conduct comparison for the previous block
-        comparisonVectors ++= Compare.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
+        labeledPoints ++= Compare.compareWithinBlock(label, bkvPrev, leftTuples, selfTuples, rightTuples)
         // Reset tuple lists
         leftTuples.clear()
         rightTuples.clear()
@@ -54,8 +54,8 @@ object DisDedupReducer {
     }
 
     // Conduct comparison for the last block
-    comparisonVectors ++= Compare.compareWithinBlock(bkvPrev, leftTuples, selfTuples, rightTuples)
+    labeledPoints ++= Compare.compareWithinBlock(label, bkvPrev, leftTuples, selfTuples, rightTuples)
 
-    comparisonVectors.iterator
+    labeledPoints.iterator
   }
 }

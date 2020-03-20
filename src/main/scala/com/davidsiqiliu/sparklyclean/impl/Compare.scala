@@ -7,10 +7,10 @@ import scala.collection.mutable.ArrayBuffer
 
 object Compare {
 
-  def compare(tuple1: String, tuple2: String): List[Double] = {
+  def getFeatures(tuple1: String, tuple2: String): List[String] = {
     val t1 = tokenize(tuple1)
     val t2 = tokenize(tuple2)
-    val vector: ArrayBuffer[Double] = ArrayBuffer()
+    val features: ArrayBuffer[Double] = ArrayBuffer()
 
     /*
       0: rec_id (String) - ignore
@@ -35,32 +35,33 @@ object Compare {
     fields.map {
       case (idx, func) =>
         if (func == "Levenshtein") {
-          vector += Levenshtein.score(t1(idx), t2(idx))
+          features += Levenshtein.score(t1(idx), t2(idx))
         }
         else if (func == "SqrtDiff") {
           try {
-            vector += math.sqrt(math.abs(t1(idx).toInt - t2(idx).toInt))
+            features += math.sqrt(math.abs(t1(idx).toInt - t2(idx).toInt))
           } catch {
-            case _: NumberFormatException => vector += -1.0
+            case _: NumberFormatException => features += Double.MaxValue
           }
         } else {
-          vector += 0.0
+          features += 0.0
         }
     }
 
-    vector.toList
+    features.map(_.toString).toList
   }
 
-  def compareWithinBlock(bkv: BKV, leftTuples: ArrayBuffer[String], selfTuples: ArrayBuffer[String], rightTuples: ArrayBuffer[String]):
-  ArrayBuffer[((String, String), List[Double])] = {
-    val comparisonVectors: ArrayBuffer[((String, String), List[Double])] = ArrayBuffer()
+  def compareWithinBlock(label: Boolean, bkv: BKV, leftTuples: ArrayBuffer[String], selfTuples: ArrayBuffer[String], rightTuples: ArrayBuffer[String]):
+  List[String] = {
+    // [t1Id, t2Id, label (if available), feature1, feature2, ...]
+    val labeledPoints: ArrayBuffer[String] = ArrayBuffer()
 
     if (leftTuples.nonEmpty && rightTuples.nonEmpty) {
       for (i <- leftTuples.indices; j <- rightTuples.indices) {
         val t1 = leftTuples(i)
         val t2 = rightTuples(j)
         if (bkv.b <= lowestCommonBlockNum(t1, t2)) {
-          comparisonVectors += (((getId(t1), getId(t2)), compare(t1, t2)))
+          labeledPoints += (Array(getId(t1), getId(t2), getLabel(label, t1, t2)) ++ getFeatures(t1, t2)).mkString(",")
         }
       }
     } else {
@@ -69,12 +70,12 @@ object Compare {
           val t1 = selfTuples(i)
           val t2 = selfTuples(j)
           if (bkv.b <= lowestCommonBlockNum(t1, t2)) {
-            comparisonVectors += (((getId(t1), getId(t2)), compare(t1, t2)))
+            labeledPoints += (Array(getId(t1), getId(t2), getLabel(label, t1, t2)) ++ getFeatures(t1, t2)).mkString(",")
           }
         }
       }
     }
 
-    comparisonVectors
+    labeledPoints.toList
   }
 }

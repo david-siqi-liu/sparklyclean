@@ -4,18 +4,29 @@ import com.davidsiqiliu.sparklyclean.impl._
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.log4j.Logger
 import org.apache.spark.{SparkConf, SparkContext}
+import org.rogach.scallop.{ScallopConf, ScallopOption}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
-object SparklyCleanMain {
+class GenerateLabeledPointsConf(args: Seq[String]) extends ScallopConf(args) {
+  mainOptions = Seq(input, output, reducers)
+  val input: ScallopOption[String] = opt[String](descr = "input path", required = true)
+  val output: ScallopOption[String] = opt[String](descr = "output path", required = false, default = Some(""))
+  val reducers: ScallopOption[Int] = opt[Int](descr = "number of reducers", required = false, default = Some(1))
+  val header: ScallopOption[Boolean] = opt[Boolean]()
+  val label: ScallopOption[Boolean] = opt[Boolean]()
+  verify()
+}
+
+object GenerateLabeledPoints {
   val log: Logger = Logger.getLogger(getClass.getName)
 
   def main(argv: Array[String]): Unit = {
 
-    val args = new Conf(argv)
+    val args = new GenerateLabeledPointsConf(argv)
 
-    val conf = new SparkConf().setAppName("DisDedup")
+    val conf = new SparkConf().setAppName("SparklyClean - GenerateLabeledPoints")
     val sc = new SparkContext(conf)
 
     // Read in input file
@@ -55,26 +66,15 @@ object SparklyCleanMain {
     val partitionedRDD = inputRDD
       .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
 
-//    // Similarity score threshold
-//    val threshold = args.threshold()
-
     // Reduce
+    val label = args.label()
     val outputRDD = partitionedRDD
-      .mapPartitions(iter => DisDedupReducer.reduce(iter))
-//      .filter {
-//        case (score, (_, _)) => score >= threshold
-//      }
+      .mapPartitions(iter => DisDedupReducer.reduce(label, iter))
 
+    // Save generated points
     if (args.output() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.output()), true)
-      if (args.coalesce()) {
-        outputRDD.coalesce(1, shuffle = true).saveAsTextFile(args.output())
-      } else {
-        inputRDD.saveAsTextFile(args.output() + "/mapper")
-        partitionedRDD.saveAsTextFile(args.output() + "/partitioner")
-        outputRDD.saveAsTextFile(args.output() + "/reducer")
-        //        outputRDD.saveAsTextFile(args.output())
-      }
+      outputRDD.saveAsTextFile(args.output())
       log.info("\nOutput: " + args.output())
     }
 

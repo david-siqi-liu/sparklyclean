@@ -15,6 +15,23 @@ object Util {
     t(0).trim()
   }
 
+  def getLabel(label: Boolean, tuple1: String, tuple2: String): String = {
+    // Know the ground truth
+    if (label) {
+      val t1Id = getId(tuple1)
+      val t2Id = getId(tuple2)
+
+      // Duplicate
+      if (t1Id.split("-")(1)== t2Id.split("-")(1)){
+        "1"
+      } else {
+        "0"
+      }
+    } else {
+      ""
+    }
+  }
+
   def getBKVs(tuple: String): List[BKV] = {
     val STATE_POS = 8
     val BKV_POS = 13
