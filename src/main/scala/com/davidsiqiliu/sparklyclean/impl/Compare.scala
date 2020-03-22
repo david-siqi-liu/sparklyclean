@@ -30,7 +30,7 @@ object Compare {
      */
     val fields: List[(Int, String)] =
       List((0, "Ignore"), (1, "Levenshtein"), (2, "Levenshtein"), (3, "Levenshtein"), (4, "Levenshtein"), (5, "Levenshtein"), (6, "Levenshtein"),
-        (7, "Levenshtein"), (8, "Levenshtein"), (9, "SqrtDiff"), (10, "SqrtDiff"), (11, "SqrtDiff"), (12, "SqrtDiff"), (13, "Ignore"))
+        (7, "Levenshtein"), (8, "Levenshtein"), (9, "SqrtDiff"), (10, "AbsDiff"), (11, "Levenshtein"), (12, "Levenshtein"), (13, "Ignore"))
 
     fields.map {
       case (idx, func) =>
@@ -39,7 +39,13 @@ object Compare {
         }
         else if (func == "SqrtDiff") {
           try {
-            features += math.sqrt(math.abs(t1(idx).toInt - t2(idx).toInt))
+            features += math.sqrt(math.abs(t1(idx).trim().toLong - t2(idx).trim().toLong))
+          } catch {
+            case _: NumberFormatException => features += Double.MaxValue
+          }
+        } else if (func == "AbsDiff") {
+          try {
+            features += math.abs(t1(idx).trim().toLong - t2(idx).trim().toLong)
           } catch {
             case _: NumberFormatException => features += Double.MaxValue
           }

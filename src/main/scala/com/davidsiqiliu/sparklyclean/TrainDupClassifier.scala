@@ -91,7 +91,7 @@ object TrainDupClassifier {
     val Array(training, testing) = data.randomSplit(Array(0.7, 0.3))
 
     // Train a Naive Bayes model
-    val clfNB = trainNaiveBayes(training, testing)
+    //    val clfNB = trainNaiveBayes(training, testing)
 
     // Train a GradientBoostedTrees model
     val clfGBT = trainGradientBoostedTrees(training, testing)
@@ -99,7 +99,7 @@ object TrainDupClassifier {
     // Save models
     if (args.model() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.model()), true)
-      clfNB.save(sc, args.model() + "/nb")
+      //      clfNB.save(sc, args.model() + "/nb")
       clfGBT.save(sc, args.model() + "/gbt")
       log.info("\nModel: " + args.model())
     }

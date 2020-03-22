@@ -42,13 +42,13 @@ object ApplyDupClassifier {
     log.info("\nInput: " + args.input())
 
     // Load and apply NaiveBayes model
-    val clfNB = NaiveBayesModel.load(sc, args.model() + "/nb")
-    val predictionsNB = data
-      .map {
-        case ((t1Id, t2Id), features) =>
-          ((t1Id, t2Id), clfNB.predict(features))
-      }
-      .sortBy(_._2)
+    //    val clfNB = NaiveBayesModel.load(sc, args.model() + "/nb")
+    //    val predictionsNB = data
+    //      .map {
+    //        case ((t1Id, t2Id), features) =>
+    //          ((t1Id, t2Id), clfNB.predict(features))
+    //      }
+    //      .sortBy(_._2)
 
     // Load and apply GradientBoostedTrees model
     val clfGBT = GradientBoostedTreesModel.load(sc, args.model() + "/gbt")
@@ -62,7 +62,7 @@ object ApplyDupClassifier {
     // Save predictions
     if (args.output() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.output()), true)
-      predictionsNB.saveAsTextFile(args.output() + "/nb")
+      //      predictionsNB.saveAsTextFile(args.output() + "/nb")
       predictionsGBT.saveAsTextFile(args.output() + "/gbt")
       log.info("\nOutput: " + args.output())
     }
