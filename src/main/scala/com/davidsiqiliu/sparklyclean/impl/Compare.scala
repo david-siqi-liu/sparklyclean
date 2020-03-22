@@ -16,17 +16,17 @@ object Compare {
       0: rec_id (String) - ignore
       1: given_name (String)
       2: surname (String)
-      3: street_number (Int)
+      3: street_number (Long)
       4: address_1 (String)
       5: address_2 (String)
       6: suburb (String)
       7: postcode (String)
       8: state (String)
-      9: date_of_birth (Int)
-      10: age (Int)
+      9: date_of_birth (Long)
+      10: age (Long)
       11: phone_number (String)
-      12: soc_sec_id (Int)
-      13: blocking_number (Int) - ignore
+      12: soc_sec_id (Long)
+      13: blocking_number (Long) - ignore
      */
     val fields: List[(Int, String)] =
       List((0, "Ignore"), (1, "Levenshtein"), (2, "Levenshtein"), (3, "Levenshtein"), (4, "Levenshtein"), (5, "Levenshtein"), (6, "Levenshtein"),

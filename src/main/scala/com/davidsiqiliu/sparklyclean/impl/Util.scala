@@ -57,11 +57,11 @@ object Util {
     }
   }
 
-  def lowestCommonBlockNum(tuple1: String, tuple2: String): Int = {
+  def lowestCommonBlockNum(tuple1: String, tuple2: String): Long = {
     val t1BKVs: List[BKV] = getBKVs(tuple1)
     val t2BKVs: List[BKV] = getBKVs(tuple2)
 
-    var lowest: Int = Int.MaxValue
+    var lowest: Long = Int.MaxValue
 
     for (t1bkv <- t1BKVs; t2bkv <- t2BKVs) {
       if (t1bkv == t2bkv) {

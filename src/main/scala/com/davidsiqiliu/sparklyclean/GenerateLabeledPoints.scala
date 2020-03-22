@@ -47,8 +47,8 @@ object GenerateLabeledPoints {
 
     // Get HashMap for bkv (block-key-value) to reducer ID
     val k = args.reducers()
-    val hmBKV2RID = sc.broadcast(Setup.setup(inputFile, k, rand))
-    log.info("\nhmBKV2RID: " + hmBKV2RID.value.toString())
+    val hmBKV2RID = sc.broadcast(Setup.setup(log, inputFile, k, rand))
+    log.info("\nhmBKV2RID:\n" + hmBKV2RID.value.mkString("\n"))
 
     // Map
     val inputRDD = inputFile
