@@ -1,0 +1,6 @@
+rec_id, given_name, surname, street_number, address_1, address_2, suburb, postcode, state, date_of_birth, age, phone_number, soc_sec_id, blocking_number
+rec-1-org-0,   caitlin, haskett, 6, bunbury street, , regents park, 3170, sa, 19680915, 30, 03 32086348, 5419110, 4
+rec-1-dup-1, caitlin, haskett, 6, bunbury drreet, , regents park, 3170, sa, 19680915, 30, 03 32086348, 5419110, 4
+rec-2-org-0,   kazuki, geraghty, 100, gooreen street, crookshanks, saddleworth, 6158, vic, 19870518, 35, 08 33195624, 2365977, 9
+rec-2-dup-1, kazuki, geraghty, 100, gooreen street, crookshanks, saddleworth, 6108, vic, 19870508, 35, 08 33195624, 2365977, 9
+rec-2-dup-2, kazuki, geraghty, 109, gooreen street, crookshanks, saddleworth, 6158, vic, 19650602, 35, 08 33195624, 2365977, 9

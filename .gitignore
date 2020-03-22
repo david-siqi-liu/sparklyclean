@@ -1,5 +1,4 @@
 .gitattributes
-/data/
 /target/
 /output/
 /dbfs_output/
