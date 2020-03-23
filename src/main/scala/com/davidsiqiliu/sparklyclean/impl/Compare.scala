@@ -35,19 +35,31 @@ object Compare {
     fields.map {
       case (idx, func) =>
         if (func == "Levenshtein") {
-          features += Levenshtein.score(t1(idx), t2(idx))
+          features += Levenshtein.score(t1(idx).trim(), t2(idx).trim())
         }
         else if (func == "SqrtDiff") {
           try {
             features += math.sqrt(math.abs(t1(idx).trim().toLong - t2(idx).trim().toLong))
           } catch {
-            case _: NumberFormatException => features += Double.MaxValue
+            case _: NumberFormatException => {
+              if (t1(idx).trim() == "" && t2(idx).trim() == "") {
+                features += 1.0
+              } else {
+                features += Double.MaxValue
+              }
+            }
           }
         } else if (func == "AbsDiff") {
           try {
             features += math.abs(t1(idx).trim().toLong - t2(idx).trim().toLong)
           } catch {
-            case _: NumberFormatException => features += Double.MaxValue
+            case _: NumberFormatException => {
+              if (t1(idx).trim() == "" && t2(idx).trim() == "") {
+                features += 1.0
+              } else {
+                features += Double.MaxValue
+              }
+            }
           }
         } else {
           features += 0.0

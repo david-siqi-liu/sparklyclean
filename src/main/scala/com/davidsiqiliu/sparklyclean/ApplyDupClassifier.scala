@@ -2,9 +2,9 @@ package com.davidsiqiliu.sparklyclean
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.log4j.Logger
-import org.apache.spark.mllib.classification.NaiveBayesModel
-import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.tree.model.GradientBoostedTreesModel
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.linalg.Vectors
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 
@@ -25,6 +25,8 @@ object ApplyDupClassifier {
 
     val conf = new SparkConf().setAppName("SparklyClean - ApplyDupClassifier")
     val sc = new SparkContext(conf)
+    val sparkSession = SparkSession.builder.getOrCreate
+    import sparkSession.implicits._
 
     // Read in (non)labeled points
     val data = sc.textFile(args.input())
@@ -32,38 +34,32 @@ object ApplyDupClassifier {
         line => {
           // [t1, t2, _ (no label), feature1, feature2, ...]
           val tokens: Array[String] = line.split(",")
-          val t1: String = tokens(0)
-          val t2: String = tokens(1)
+          val pair: String = s"(${tokens(0)},${tokens(1)})"
           val features: Array[Double] = tokens.slice(3, tokens.length).map(_.toDouble)
 
-          ((t1, t2), Vectors.dense(features))
+          (pair, Vectors.dense(features))
         }
-      )
+      ).toDF("id", "features")
     log.info("\nInput: " + args.input())
 
-    // Load and apply NaiveBayes model
-    //    val clfNB = NaiveBayesModel.load(sc, args.model() + "/nb")
-    //    val predictionsNB = data
-    //      .map {
-    //        case ((t1Id, t2Id), features) =>
-    //          ((t1Id, t2Id), clfNB.predict(features))
-    //      }
-    //      .sortBy(_._2)
+    // Load and apply learned model
+    val pipelineModel = PipelineModel.load(args.model())
+    log.info("\nModel: " + args.model())
 
-    // Load and apply GradientBoostedTrees model
-    val clfGBT = GradientBoostedTreesModel.load(sc, args.model() + "/gbt")
-    val predictionsGBT = data
-      .map {
-        case ((t1Id, t2Id), features) =>
-          ((t1Id, t2Id), clfGBT.predict(features))
+    val predictions = pipelineModel
+      .transform(data)
+      .select("id", "prediction")
+      .rdd
+      .map{
+        case Row(id: String, prediction: Double) =>
+          (id, prediction)
       }
       .sortBy(_._2)
 
     // Save predictions
     if (args.output() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.output()), true)
-      //      predictionsNB.saveAsTextFile(args.output() + "/nb")
-      predictionsGBT.saveAsTextFile(args.output() + "/gbt")
+      predictions.saveAsTextFile(args.output())
       log.info("\nOutput: " + args.output())
     }
 

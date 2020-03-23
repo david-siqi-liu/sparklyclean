@@ -2,14 +2,10 @@ package com.davidsiqiliu.sparklyclean
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.log4j.Logger
-import org.apache.spark.mllib.classification.{NaiveBayes, NaiveBayesModel}
-import org.apache.spark.mllib.evaluation.MulticlassMetrics
-import org.apache.spark.mllib.linalg.Vectors
-import org.apache.spark.mllib.regression.LabeledPoint
-import org.apache.spark.mllib.tree.GradientBoostedTrees
-import org.apache.spark.mllib.tree.configuration.BoostingStrategy
-import org.apache.spark.mllib.tree.model.GradientBoostedTreesModel
-import org.apache.spark.rdd.RDD
+import org.apache.spark.ml.classification.{GBTClassificationModel, GBTClassifier}
+import org.apache.spark.ml.linalg.{Matrices, Matrix, Vectors}
+import org.apache.spark.ml.{Pipeline, PipelineModel}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 
@@ -23,47 +19,49 @@ class TrainDupClassifierConf(args: Seq[String]) extends ScallopConf(args) {
 object TrainDupClassifier {
   val log: Logger = Logger.getLogger(getClass.getName)
 
-  def trainNaiveBayes(training: RDD[LabeledPoint], testing: RDD[LabeledPoint]): NaiveBayesModel = {
-    val clfNB = NaiveBayes.train(input = training, lambda = 1.0, modelType = "multinomial")
+  def trainGradientBoostedTrees(data: Dataset[Row]): PipelineModel = {
+    // GBT
+    val gbt = new GBTClassifier()
+      .setLabelCol("label")
+      .setFeaturesCol("features")
+      .setMaxIter(100)
+      .setMaxDepth(3)
+      .setFeatureSubsetStrategy("auto")
+      .setSeed(647)
 
-    // Perform predictions
-    val predictionAndLabel = testing
-      .map(
-        p =>
-          (clfNB.predict(p.features), p.label)
-      )
+    // Chain indexers, GBT and converter in a Pipeline
+    val pipeline = new Pipeline().setStages(Array(gbt))
 
-    // Confusion matrix
-    val metrics = new MulticlassMetrics(predictionAndLabel)
-    log.info("\nNaiveBayes - Confusion Matrix:\n" + metrics.confusionMatrix)
+    // Split into training (70%) and testing (30%) sets
+    val Array(training, testing) = data.randomSplit(Array(0.7, 0.3), seed = 647)
 
-    clfNB
-  }
+    // Train model
+    val model = pipeline.fit(training)
 
-  def trainGradientBoostedTrees(training: RDD[LabeledPoint], testing: RDD[LabeledPoint]): GradientBoostedTreesModel = {
-    // The defaultParams for Classification use LogLoss by default.
-    val boostingStrategy = BoostingStrategy.defaultParams("Classification")
-    boostingStrategy.numIterations = 100 // Note: Use more iterations in practice.
-    boostingStrategy.treeStrategy.numClasses = 2
-    boostingStrategy.treeStrategy.maxDepth = 5
+    // Make predictions
+    val predictions = model.transform(testing)
 
-    // Empty categoricalFeaturesInfo indicates all features are continuous.
-    boostingStrategy.treeStrategy.categoricalFeaturesInfo = Map[Int, Int]()
+    // Evaluate
+    val TP = predictions.select("label", "prediction").filter("label = 0 and prediction = 0").count
+    val TN = predictions.select("label", "prediction").filter("label = 1 and prediction = 1").count
+    val FP = predictions.select("label", "prediction").filter("label = 0 and prediction = 1").count
+    val FN = predictions.select("label", "prediction").filter("label = 1 and prediction = 0").count
+    val total = predictions.select("label").count.toDouble
 
-    val clfGBT = GradientBoostedTrees.train(training, boostingStrategy)
+    val confusionMatrix: Matrix = Matrices.dense(2, 2, Array(TP, FN, FP, TN))
+    log.info("\nConfusion Matrix:\n" + confusionMatrix)
 
-    // Perform predictions
-    val predictionAndLabel = testing
-      .map(
-        p =>
-          (clfGBT.predict(p.features), p.label)
-      )
+    val accuracy = (TP + TN) / total
+    val precision = (TP + FP) / total
+    val recall = (TP + FN) / total
+    val F1 = 2 / (1 / precision + 1 / recall)
+    log.info("\nAccuracy:\n" + accuracy)
+    log.info("\nPrecision:\n" + precision)
+    log.info("\nRecall:\n" + recall)
+    log.info("\nF1:\n" + F1)
 
-    // Confusion matrix
-    val metrics = new MulticlassMetrics(predictionAndLabel)
-    log.info("\nGradientBoostedTrees - Confusion Matrix:\n" + metrics.confusionMatrix)
-
-    clfGBT
+    // Return learned model
+    model
   }
 
   def main(argv: Array[String]): Unit = {
@@ -72,6 +70,8 @@ object TrainDupClassifier {
 
     val conf = new SparkConf().setAppName("SparklyClean - TrainDupClassifier")
     val sc = new SparkContext(conf)
+    val sparkSession = SparkSession.builder.getOrCreate
+    import sparkSession.implicits._
 
     // Read in labeled points
     val data = sc.textFile(args.input())
@@ -79,29 +79,27 @@ object TrainDupClassifier {
         line => {
           // [t1Id, t2Id, label, feature1, feature2, ...]
           val tokens: Array[String] = line.split(",")
+          val pair: String = s"(${tokens(0)},${tokens(1)})"
           val label: Double = tokens(2).toDouble
           val features: Array[Double] = tokens.slice(3, tokens.length).map(_.toDouble)
 
-          LabeledPoint(label, Vectors.dense(features))
+          (pair, label, Vectors.dense(features))
         }
-      )
+      ).toDF("id", "label", "features")
     log.info("\nInput: " + args.input())
 
-    // Split into training (70%) and testing (30%) sets
-    val Array(training, testing) = data.randomSplit(Array(0.7, 0.3))
+    // Train a pipeline and model
+    val pipelineModel = trainGradientBoostedTrees(data)
 
-    // Train a Naive Bayes model
-    //    val clfNB = trainNaiveBayes(training, testing)
+    // Output model specifics
+    val model = pipelineModel.stages(0).asInstanceOf[GBTClassificationModel]
+    log.info("\nLearned GradientBoostedTrees model:\n" + model.toDebugString)
 
-    // Train a GradientBoostedTrees model
-    val clfGBT = trainGradientBoostedTrees(training, testing)
-
-    // Save models
+    // Save pipeline and model
     if (args.model() != "") {
       FileSystem.get(sc.hadoopConfiguration).delete(new Path(args.model()), true)
-      //      clfNB.save(sc, args.model() + "/nb")
-      clfGBT.save(sc, args.model() + "/gbt")
-      log.info("\nModel: " + args.model())
+      pipelineModel.write.overwrite().save(args.model())
+      log.info("\nSaved model: " + args.model())
     }
 
     sc.stop()
