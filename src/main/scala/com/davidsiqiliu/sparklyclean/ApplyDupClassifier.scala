@@ -50,7 +50,7 @@ object ApplyDupClassifier {
       .transform(data)
       .select("id", "prediction")
       .rdd
-      .map{
+      .map {
         case Row(id: String, prediction: Double) =>
           (id, prediction)
       }

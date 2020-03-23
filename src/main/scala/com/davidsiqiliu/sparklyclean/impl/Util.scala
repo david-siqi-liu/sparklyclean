@@ -22,7 +22,7 @@ object Util {
       val t2Id = getId(tuple2)
 
       // Duplicate
-      if (t1Id.split("-")(1)== t2Id.split("-")(1)){
+      if (t1Id.split("-")(1) == t2Id.split("-")(1)) {
         "1"
       } else {
         "0"
