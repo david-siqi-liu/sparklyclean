@@ -44,7 +44,7 @@ At a very high level, the framework does the following:
    
 2. In the **map** phase, multiple-reducer blocks' workers get handled via the Triangle Distribution Strategy
 
-   ![image-20200324111009139](pics/image-20200324111009139.png)
+   ![triangle-distribution](pics/triangle-distribution.png)
 
 3. In the **partition** phase, tuples are sent to their designated worker(s)
 
