@@ -60,9 +60,9 @@ Please refer to the original paper for details and proofs on optimality.
 
 ### 3. Improvements
 
-This implementation builds upon the algorithms proposed by the paper in several ways
+In the paper, multi-reducer block *i* gets assigned *k_i* number of workers during the setup phase. However, in the reduce phase, *l_i* is computed to be the largest integer such that *l_i (l_i - 1) / 2 <= k_i*. This means that the number of workers that are actually used across all multi-reducer blocks could be substantially smaller than the total number of workers available, leaving many workers idle. To tackle this issue, this implementation
 
-- 
+- Re-distribute left-over workers to each multi-reducer block, based on the difference between their computed $`k_i`$
 
 ---
 
