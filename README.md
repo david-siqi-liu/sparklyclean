@@ -35,15 +35,15 @@ Please refer to the original paper for details and proofs on optimality.
 
 ```
 ├── impl
-│   ├── BKV       						<- Block-Key-Value class
-│   ├── Compare        				<- Custom comparison functions for creating similarity features
-│   ├── DisDedupMapper      	<- Mapper function
-│   └── DisDedupPartitioner		<- Partitioner function
-│   └── DisDedupReducer				<- Reducer function
-│   └── Setup									<- Setup function
-│   └── Util									<- Utility functions
-├── GenerateLabeledPoints			<- Main class, conduct pairwise comparisons and output similarity features
-├── TrainDupClassifier				<- Train a classification model on labeled dataset
-├── ApplyDupClassifier				<- Apply the trained model on unlabeled dataset
+│   ├── BKV                   <- Block-Key-Value class
+│   ├── Compare               <- Custom comparison functions for creating similarity features
+│   ├── DisDedupMapper        <- Mapper function
+│   └── DisDedupPartitioner   <- Partitioner function
+│   └── DisDedupReducer       <- Reducer function
+│   └── Setup                 <- Setup function
+│   └── Util                  <- Utility functions
+├── GenerateLabeledPoints     <- Main class, conduct pairwise comparisons and output similarity features
+├── TrainDupClassifier        <- Train a classification model on labeled dataset
+├── ApplyDupClassifier        <- Apply the trained model on unlabeled dataset
 ```
 
