@@ -15,7 +15,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <scala.version>2.11.8</scala.version>
-        <hbase.version>1.2.6</hbase.version>
         <hadoop.version>3.0.3</hadoop.version>
         <spark.version>2.3.1</spark.version>
     </properties>
@@ -26,67 +25,11 @@
             <artifactId>stringdistance_2.12</artifactId>
             <version>1.1.4</version>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>junit</groupId>-->
-<!--            <artifactId>junit</artifactId>-->
-<!--            <version>4.12</version>-->
-<!--            <scope>test</scope>-->
-<!--        </dependency>-->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
             <version>${hadoop.version}</version>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>org.apache.hbase</groupId>-->
-<!--            <artifactId>hbase-client</artifactId>-->
-<!--            <version>${hbase.version}</version>-->
-<!--        </dependency>-->
-<!--        <dependency>  &lt;!&ndash; Needed for using MapReduce w/ HBase &ndash;&gt;-->
-<!--            <groupId>org.apache.hbase</groupId>-->
-<!--            <artifactId>hbase-server</artifactId>-->
-<!--            <version>${hbase.version}</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>args4j</groupId>-->
-<!--            <artifactId>args4j</artifactId>-->
-<!--            <version>2.33</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>tl.lin</groupId>-->
-<!--            <artifactId>lintools-datatypes</artifactId>-->
-<!--            <version>1.1.1</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>net.sf.jung</groupId>-->
-<!--            <artifactId>jung-api</artifactId>-->
-<!--            <version>2.1.1</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>net.sf.jung</groupId>-->
-<!--            <artifactId>jung-algorithms</artifactId>-->
-<!--            <version>2.1.1</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>net.sf.jung</groupId>-->
-<!--            <artifactId>jung-graph-impl</artifactId>-->
-<!--            <version>2.1.1</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>com.google.guava</groupId>-->
-<!--            <artifactId>guava</artifactId>-->
-<!--            <version>23.6-jre</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>org.scala-lang</groupId>-->
-<!--            <artifactId>scala-library</artifactId>-->
-<!--            <version>${scala.version}</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>org.scalatest</groupId>-->
-<!--            <artifactId>scalatest_2.11</artifactId>-->
-<!--            <version>3.0.4</version>-->
-<!--        </dependency>-->
         <dependency>
             <groupId>org.rogach</groupId>
             <artifactId>scallop_2.11</artifactId>
@@ -102,16 +45,6 @@
             <artifactId>spark-mllib_2.11</artifactId>
             <version>${spark.version}</version>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-sql_2.11</artifactId>-->
-<!--            <version>${spark.version}</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>org.apache.spark</groupId>-->
-<!--            <artifactId>spark-streaming_2.11</artifactId>-->
-<!--            <version>${spark.version}</version>-->
-<!--        </dependency>-->
     </dependencies>
 
     <build>
