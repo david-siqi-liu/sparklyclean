@@ -1,3 +1,28 @@
+/**
+ * Main class for generating labeled points of similarity features between two tuples
+ *
+ * Copyright (c) 2020 David Liu
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ */
+
 package com.davidsiqiliu.sparklyclean
 
 import com.davidsiqiliu.sparklyclean.impl._
@@ -29,7 +54,7 @@ object GenerateLabeledPoints {
     val conf = new SparkConf().setAppName("SparklyClean - GenerateLabeledPoints")
     val sc = new SparkContext(conf)
 
-    // Read in input file
+    // Read in input file, skip first line if there's header
     var inputFile = sc.emptyRDD[String]
     if (args.header()) {
       inputFile = sc
@@ -42,10 +67,11 @@ object GenerateLabeledPoints {
     }
     log.info("\nInput: " + args.input())
 
-    // Initialize random number generator
+    // Initialize a random number generator through the program
     val rand = new Random(seed = 647)
 
-    // Get HashMap for bkv (block-key-value) to reducer ID
+    // Get mapping for BKV (Block-Key-Value) to reducer IDs (List of Ints)
+    // Broadcast to all workers
     val k = args.reducers()
     val hmBKV2RID = sc.broadcast(Setup.setup(log, inputFile, k, rand))
     log.info("\nhmBKV2RID:\n" + hmBKV2RID.value.mkString("\n"))
@@ -63,13 +89,14 @@ object GenerateLabeledPoints {
       })
 
     // Partition
+    // Note that we sort the value within each partition based on the BKV, so that
+    // Tuples with the same BKV are grouped together
     val partitionedRDD = inputRDD
       .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
 
     // Reduce
-    val label = args.label()
     val outputRDD = partitionedRDD
-      .mapPartitions(iter => DisDedupReducer.reduce(label, iter))
+      .mapPartitions(iter => DisDedupReducer.reduce(args.label(), iter))
 
     // Save generated points
     if (args.output() != "") {

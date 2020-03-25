@@ -1,3 +1,10 @@
+/**
+ * Reduce phase
+ *  1. Group tuples with the same BKV together
+ *  2. Conduct comparisons within each group
+ *  3. Return an Iterator of "t1Id, t2Id, label (if available), feature1, feature2, ..."
+ */
+
 package com.davidsiqiliu.sparklyclean.impl
 
 import scala.collection.mutable.ArrayBuffer

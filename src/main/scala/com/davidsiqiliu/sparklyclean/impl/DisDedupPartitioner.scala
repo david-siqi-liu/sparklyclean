@@ -1,3 +1,7 @@
+/**
+ * Partition phase - simply return the reducer ID (minus 1, since IDs start with 1 instead of 0)
+ */
+
 package com.davidsiqiliu.sparklyclean.impl
 
 import org.apache.spark.Partitioner

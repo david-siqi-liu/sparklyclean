@@ -1,3 +1,11 @@
+/**
+ * Utility functions, key functions that should be customized:
+ *  1. tokenize
+ *  2. getId
+ *  3. getLabel
+ *  4. getBKVs
+ */
+
 package com.davidsiqiliu.sparklyclean.impl
 
 import scala.collection.mutable.ArrayBuffer
@@ -21,10 +29,12 @@ object Util {
       val t1Id = getId(tuple1)
       val t2Id = getId(tuple2)
 
-      // Duplicate
+      // Duplicate pair
       if (t1Id.split("-")(1) == t2Id.split("-")(1)) {
         "1"
-      } else {
+      }
+      // Not a duplicate pair
+      else {
         "0"
       }
     } else {
@@ -65,7 +75,7 @@ object Util {
 
     for (t1bkv <- t1BKVs; t2bkv <- t2BKVs) {
       if (t1bkv == t2bkv) {
-        lowest = math.min(lowest, t1bkv.b)
+        lowest = math.min(lowest, t1bkv.k)
       }
     }
 
