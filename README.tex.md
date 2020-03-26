@@ -1,6 +1,6 @@
 # SparklyClean
 
-Scala-based, Spark implementation of [Distributed Data Deduplication](http://www.vldb.org/pvldb/vol9/p864-chu.pdf) that guarantees optimal data distribution in distributed data deduplication tasks.
+Scala-based, Spark implementation of [Distributed Data Deduplication](http://www.vldb.org/pvldb/vol9/p864-chu.pdf) that guarantees optimal data distribution (exactly once comparison, automatic load-balancing) in distributed data deduplication tasks.
 
 This repo can be used as a starting point for any distributed data deduplication task.
 
@@ -22,37 +22,37 @@ This repo can be used as a starting point for any distributed data deduplication
 
 **Data deduplication** is the process of identifying tuples in a dataset that refer to the same real world entity. It is very costly to be ran on a single machine - for a dataset with $n$ tuples, this is a $O(n^2)$ operation since each tuple needs to be compared with every other tuple in the dataset.
 
-A commonly used technique to avoid this quadratic complexity is **blocking**. Basically, blocking functions partition the dataset into disjoint blocks, and only tuples within the same blocks are compared. For example, suppose we possess some domain-knowledge, and introduces a blocking function (e.g., account type) that partitions the dataset into two equally-large blocks of size $\frac{n}{2}$, then the total number of pair-wise comparisons becomes $2(\frac{n}{2})^2 = \frac{n^2}{2}$, half of the original. Unfortunately, this may introduce many false-negatives (e.g., when account type is null), so in practice, multiple blocking functions are used together.
+A commonly used technique to avoid this quadratic complexity is to use **blocking functions**. Basically, blocking functions partition the dataset into disjoint blocks, and only tuples within the same blocks are compared. For example, suppose we possess some domain-knowledge, and introduce a blocking function (e.g., account type) that partitions the dataset into two equally large blocks of size $\frac{n}{2}$. Then, the total number of pair-wise comparisons becomes $2(\frac{n}{2})^2 = \frac{n^2}{2}$, half of the original number. Unfortunately, this may introduce many false-negatives (e.g., when account type is null), so in practice, multiple blocking functions are used together.
 
-With the help of **distributed systems** such as Hadoop MapReduce and Spark, we can parallelize this intensivie data deduplication task. Several challenges need to be addressed:
+With the help of **distributed systems** such as Hadoop MapReduce and Spark, we can parallelize this computation intensivie task. Several challenges need to be addressed:
 
-1. In addition to **computation cost** that exists in the traditional, centralized setting, distributed algorithms also incur **communication cost**, which essentially is the network transfer and I/O cost for sending, receiving and storing data from each worker
+1. In addition to **computation cost** that exists in the traditional, centralized setting, distributed systems also incur **communication cost**, which essentially is the network transfer and I/O cost for sending, receiving and storing data from each worker
 2. It is typical to have **data skew** in a distributed task. Ideally, we want all workers to perform roughly the same amount of work so we don't encounter a "bottleneck" issue
-3. The distribution strategy should be able to handle multiple blocking functions. Specifically, we need to ensure that each tuple pair is compared exactly once, not multiple times if they exists in the same block according to multiple blocking functions
+3. The distribution strategy should be able to handle multiple blocking functions. Specifically, we need to ensure that each tuple pair is compared exactly once, not multiple times if the pair exists in the same block according to multiple blocking functions
 
 ---
 
 ### 2. DisDedup
 
-*DisDedup* is the distributed framework proposed by the paper. It aims to minimize the maximum cost (both computation and communication) across all workers in the network.
+*DisDedup* is the name of the distributed framework proposed by the paper. It aims to minimize the maximum cost (computation + communication) across all workers in the network.
 
-At a very high level, the framework does the following:
+At a very high level, the framework does the following
 
 1. In the **setup** phase, compute the amount of work (i.e., number of pair-wise comparisons) within each block, produced by each blocking function. Then, assign workers to each block based on its workload
    - Larger blocks get assigned multiple workers (multi-reducer blocks)
    - Smaller blocks each gets asssigned a single worker (either deterministically or randomly)
    
-2. In the **map** phase, multiple-reducer blocks' workers get handled via the triangle distribution strategy
+2. In the **map** phase, multiple-reducer blocks' workers get handled via the triangle distribution strategy (more details in paper)
 
    ![triangle-distribution](pics/triangle-distribution.png)
 
 3. In the **partition** phase, tuples are sent to their designated worker(s)
 
-4. In the **reduce** phase, tuples that belong to the same blocks (within each worker) are compared against one another
+4. In the **reduce** phase, tuples that belong to the same blocks (within each worker) are compared against each another
 
-   - For each tuple pair, similarity scores (e.g., edit-distance) are computed for each column
+   - For each tuple pair, similarity scores (e.g., edit-distance, Euclidean distance) are computed for each column
 
-5. Similarity features are outputted for further analysis (e.g., train machine learning algorithms)
+5. Similarity features vectors are outputted for further analysis (e.g., build machine learning classifiers)
 
 Please refer to the original paper for details and proofs on optimality.
 
@@ -66,10 +66,10 @@ For example, if $k_i = 8$, then the actual number of workers used is $\frac{3 (3
 
 To tackle this issue, this implementation
 
-- Re-distribute left-over workers to each multi-reducer block, prioritizing blocks with the highest difference between $k_i$ and $\frac{l_i (l_i + 1)}{2}$. In the above example, suppose we have 4 (or more) left-over workers, then we can give 4 to this block, making it to use $\frac{4 (4 + 1)}{2} = 10$ workers instead of just 6
+- Re-distributes left-over workers to each multi-reducer block, prioritizing blocks with the highest difference between $k_i$ and $\frac{l_i (l_i + 1)}{2}$. In the above example, suppose we have 4 (or more) left-over workers, then we can give 4 more workers to this block, making it to use $\frac{4 (4 + 1)}{2} = 10$ workers instead of just 6
 - When deterministically distribution single-reducer blocks in a round-robin fashion, start with the unassigned workers, instead of the first worker that are already being used by a multi-reducer block
 
-Empirically, these changes drastically improves the load-balancing issue among the workers.
+Empirically, these changes drastically improves load-balancing among the workers.
 
 ---
 
@@ -105,9 +105,9 @@ Empirically, these changes drastically improves the load-balancing issue among t
 
    - `Util.tokenize` - tokenize each tuple in the dataset, currently configured to be comma-delimited
    - `Util.getId` - get unique identifier for each tuple in the dataset, could be as simple as a row number
-   - `Util.getLabel` - if we know the ground truth between any two tuples in the dataset, we can create supervised training data. Otherwise, it will simply return empty
+   - `Util.getLabel` - if we know the ground truth between any two tuples in the dataset, we can create supervised training data. Otherwise, simply return an empty String
    - `Util.getBKVs` - run each blocking function on the given tuple. Note that the BKV value must be a string, and the BKV key also represents the ordering of the blocking function
-   - `Compare.getFeatures` - for any given tuple pair, generate similarity scores (Double) for each field. Ignore fields such as IDs, blocking numbers by outputing zero
+   - `Compare.getFeatures` - for any given tuple pair, generate similarity scores (Double) for each field. Ignore fields such as IDs, blocking numbers by outputing zero in order to maintain structural integrity
 
 4. Compile and run `GenerateLabeledPoints` on the dataset
 
@@ -190,11 +190,11 @@ For the training set, the entire job finished in around 6 minutes. Below are the
 
 ![spark-ui-3](pics/spark-ui-1.png)
 
-- The minimum duration is 15 seconds (worker #4)
+- The minimum duration is 15 seconds (worker #4, reducer ID 5)
 
   ![spark-ui-2](pics/spark-ui-2.png)
 
-- The maximum duration is 3.4 minutes (worker #29)
+- The maximum duration is 3.4 minutes (worker #29, reducer ID 30)
 
   ![spark-ui-3](pics/spark-ui-3.png)
 
@@ -226,7 +226,7 @@ BKV(1,4) -> 1
 BKV(1,1) -> 3
 ```
 
-It is important to recognize that this framework **does not guarantee equal work among workers**, as that would require going over all the tuple pairs once before! Instead, it provides a general approach to tackling this problem in the presence of multiple blocking functions.
+It is important to recognize that this framework **does not guarantee equal work among workers**, as that would require going over all the tuple pairs once before! Instead, it provides optimal, automatic load-balancing in the presence of multiple blocking functions.
 
 Next, `TrainDupClassifier` was ran to train a GradientBoostedTrees model using the ML library in Spark. Results as follows:
 
@@ -251,7 +251,7 @@ Feature Importance:
 
 Notice that the trained classifier placed the most importance on 12: soc_sec_id, , followed by 11: phone_number, and the least importance on 1: given_name.
 
-Lastly, `ApplyDupClassifier` was ran to apply the learned classifier on the unlabeled test set.
+Lastly, `ApplyDupClassifier` was ran to apply the learned classifier on the unlabeled test set. Below shows the confusion matrix after checking the results in Excel manually
 
 |              | Actual: 0 | Actual: 1 |
 | ------------ | --------- | --------- |
