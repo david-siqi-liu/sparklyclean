@@ -95,8 +95,9 @@ object GenerateLabeledPoints {
       .repartitionAndSortWithinPartitions(new DisDedupPartitioner(k))
 
     // Reduce
+    val label = args.label()
     val outputRDD = partitionedRDD
-      .mapPartitions(iter => DisDedupReducer.reduce(args.label(), iter))
+      .mapPartitions(iter => DisDedupReducer.reduce(label, iter))
 
     // Save generated points
     if (args.output() != "") {
